@@ -49,8 +49,8 @@ ambient, at-a-glance signal instead of alt-tabbing between windows.
 ## Install
 
 ```sh
-git clone https://github.com/<you>/termi.git
-cd termi
+git clone https://github.com/Maxing5/termi-app.git
+cd termi-app
 ./install.sh
 open -a ~/Applications/Termi.app
 ```
