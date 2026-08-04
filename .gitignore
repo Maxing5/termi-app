@@ -1,0 +1,9 @@
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Backups created by the install scripts
+*.termi-backup
