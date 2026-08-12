@@ -90,14 +90,29 @@ struct PreferencesView: View {
                     MascotSettings.customOrder = list
                 }
             }
-            .frame(height: 120)
+            // Sized to show every currently open session without scrolling, up to
+            // a cap — below that cap, a fixed height either clipped rows (a closed
+            // session's stale entry pushing a real one out of view, with no obvious
+            // affordance that the list even scrolls) or left dead space for nothing.
+            .frame(height: customOrderListHeight)
         }
     }
 
-    /// Saved order first, then any currently-open folder not yet in it.
+    private var customOrderListHeight: CGFloat {
+        let rowHeight: CGFloat = 24
+        let rows = max(orderedFolders().count, 1)
+        return min(CGFloat(rows) * rowHeight, 200)
+    }
+
+    /// Saved order first, then any currently-open folder not yet in it. Folders
+    /// belonging to a session that's since closed are dropped here — the saved
+    /// position for them still lives in MascotSettings.customOrder untouched, so
+    /// it's honored again if that folder's session reopens, but a closed session
+    /// has no business occupying a visible row (or, worse, silently pushing an
+    /// actually-open session out of the visible list).
     private func orderedFolders() -> [String] {
         let open = store.sessions.map(\.cwd)
-        var list = customOrder.filter { open.contains($0) || customOrder.contains($0) }
+        var list = customOrder.filter { open.contains($0) }
         for cwd in open where !list.contains(cwd) { list.append(cwd) }
         return list
     }
