@@ -68,6 +68,21 @@ Since the app is ad-hoc signed (built locally, not notarized by Apple), macOS
 may still show a Gatekeeper warning the first time you open it. If so,
 right-click `Termi.app` → **Open** once.
 
+### Updates
+
+There's no auto-install — Termi checks GitHub for a newer release about
+once a day, and if one exists, an **"Update available"** item appears in the
+menu bar (see below); clicking it opens the release page. Applying it is
+still manual:
+
+```sh
+git pull
+./install.sh
+```
+
+(Ad-hoc signing means a real Sparkle-style silent update would still hit
+Gatekeeper the same way a fresh download does, so this stops short of that.)
+
 Optionally, run `./install-statusline.sh` once to enable the usage-limit %
 shown in the session list — Claude Code only exposes that number to
 statusline commands, so this wraps your existing statusline script to also
@@ -84,11 +99,13 @@ The menu bar icon (a terminal glyph) has:
 | Reset Position | Snaps back to the default corner |
 | Lock Position | Disables dragging; clicking still works |
 | Mascot Size | Slider + buttons, 50–250%, snaps in 10% steps, resizes around its own centre |
+| Update available *(only when one exists)* | Opens the GitHub release page — see [Updates](#updates) |
 | Preferences… | Opens the settings window (see below) |
 | Play Sounds | Toggle alert sounds on/off |
 | Desktop Notifications | Off by default — banner notification alongside the sound |
 | Start at Login | Writes a LaunchAgent |
 | Quit Termi | — |
+| Termi vX.Y.Z | Not clickable — just shows the installed version |
 
 ![Menu bar dropdown](docs/images/menu.png)
 
@@ -212,9 +229,24 @@ time)`, so changing a number and rebuilding (~3s) is the whole iteration
 loop, and a state change can never leave a stuck half-finished animation
 behind.
 
+### Cutting a release
+
+`VERSION` is the single source of truth `make-app.sh` reads into
+`CFBundleShortVersionString`, and what running copies compare themselves
+against (see [Updates](#updates)):
+
+```sh
+echo "1.2.0" > VERSION
+git add VERSION && git commit -m "Bump version to 1.2.0"
+git tag v1.2.0
+git push && git push --tags
+gh release create v1.2.0 --title v1.2.0 --notes "..."
+```
+
 ## Project structure
 
 ```
+VERSION                   current release version — read by make-app.sh, checked against GitHub
 install.sh                install hooks + build + install the app (start here)
 install-statusline.sh     optional: enables the usage-limit % column
 make-app.sh                build + bundle + ad-hoc sign (called by install.sh)
@@ -240,6 +272,7 @@ Sources/Termi/
   Notifier.swift                sound + optional desktop notification dispatch
   PreferencesView.swift         the Preferences window
   LoginItem.swift               LaunchAgent start-at-login
+  UpdateChecker.swift           once-a-day GitHub release check, no auto-install
 ```
 
 ## Known limitations

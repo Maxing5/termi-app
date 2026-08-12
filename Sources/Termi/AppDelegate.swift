@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lockItem: NSMenuItem!
     private var soundItem: NSMenuItem!
     private var notifyItem: NSMenuItem!
+    private var updateItem: NSMenuItem!
+    private var updateURL: URL?
     private var prefsWindow: NSWindow?
     private var keyMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -41,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if MascotSettings.notificationsEnabled { Notifier.shared.requestAuthorizationIfPossible() }
         store.start()
         focusWatcher.start()
+
+        UpdateChecker.checkForUpdate { [weak self] version, url in
+            guard let self else { return }
+            self.updateURL = url
+            self.updateItem.title = "Update available (\(version))"
+            self.updateItem.isHidden = false
+        }
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -166,6 +175,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        // Hidden until UpdateChecker actually finds a newer release; title is
+        // a placeholder until then.
+        updateItem = menu.addItem(withTitle: "Update available",
+                                  action: #selector(openUpdatePage), keyEquivalent: "")
+        updateItem.target = self
+        updateItem.isHidden = true
+
         menu.addItem(withTitle: "Preferences…",
                      action: #selector(openPreferences), keyEquivalent: ",").target = self
         soundItem = menu.addItem(withTitle: "Play Sounds",
@@ -181,7 +197,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Termi",
                      action: #selector(quit), keyEquivalent: "q").target = self
+
+        // No "About Termi" panel exists — accessory apps have no application
+        // menu bar, so this disabled line is the only place the installed
+        // version is visible without leaving the app.
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        let versionItem = menu.addItem(withTitle: "Termi v\(version)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+
         statusItem.menu = menu
+    }
+
+    @objc private func openUpdatePage() {
+        guard let updateURL else { return }
+        NSWorkspace.shared.open(updateURL)
     }
 
     @objc private func openPreferences() {

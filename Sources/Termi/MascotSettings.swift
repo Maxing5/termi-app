@@ -120,4 +120,13 @@ enum MascotSettings {
         get { UserDefaults.standard.string(forKey: "doneSound") ?? SoundLibrary.defaultDone }
         set { UserDefaults.standard.set(newValue, forKey: "doneSound") }
     }
+
+    // MARK: - Updates
+
+    /// Throttles UpdateChecker to roughly once a day, regardless of how many
+    /// times the app is launched or restarted in that window.
+    static var lastUpdateCheck: Date? {
+        get { UserDefaults.standard.object(forKey: "lastUpdateCheck") as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: "lastUpdateCheck") }
+    }
 }
