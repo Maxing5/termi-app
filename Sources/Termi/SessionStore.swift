@@ -55,6 +55,14 @@ final class SessionStore: ObservableObject {
     /// Last state we alerted on, per session — also how we detect "the underlying
     /// state changed", which re-arms `doneAcknowledged` for whatever comes next.
     private var lastAlerted: [String: SessionState] = [:]
+
+    /// Each currently-tracked session's cwd as of the last reload — lets a folder
+    /// change be told apart from a brand-new session. MascotSettings.customOrder is
+    /// keyed by folder, not session id (see its doc comment), so without this an
+    /// existing session that changes folder would look identical to a new session
+    /// showing up in a folder that's never been seen before, and get pushed to the
+    /// bottom of the custom order the same way. See migrateCustomOrder.
+    private var lastKnownCwd: [String: String] = [:]
     /// True until the first load completes, so launching with sessions already in
     /// `done` doesn't fire a burst of stale notifications.
     private var isFirstLoad = true
@@ -181,7 +189,8 @@ final class SessionStore: ObservableObject {
                 cwd: raw.cwd ?? "",
                 state: SessionState(rawValue: raw.state ?? "") ?? .idle,
                 ppid: ppid,
-                ts: ts
+                ts: ts,
+                pendingBackground: raw.pendingBackground ?? false
             ))
         }
 
@@ -198,11 +207,32 @@ final class SessionStore: ObservableObject {
         askingFirstSeen = askingFirstSeen.filter { live.contains($0.key) }
         doneAcknowledged = doneAcknowledged.intersection(live)
 
+        migrateCustomOrder(loaded)
+        lastKnownCwd = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, $0.cwd) })
+
         reArmDoneAcknowledgment(loaded)
         sessions = loaded
         trackCelebrationTimestamps(loaded)
         emitAlerts(loaded)
         recomputeDisplayState()
+    }
+
+    /// Keeps a session's custom-order position when its folder changes mid-session
+    /// (e.g. `cd`ing elsewhere before the next turn) instead of losing that slot to
+    /// whatever happens to already be at the bottom of the list. Only fires for a
+    /// session we've already seen with a *different* cwd — a genuinely new session
+    /// has no previous slot to preserve, so it falls through to the normal "unlisted
+    /// folders sort last" behavior untouched.
+    private func migrateCustomOrder(_ loaded: [Session]) {
+        var order: [String]?
+        for s in loaded {
+            guard let previousCwd = lastKnownCwd[s.id], previousCwd != s.cwd else { continue }
+            var current = order ?? MascotSettings.customOrder
+            guard let idx = current.firstIndex(of: previousCwd), !current.contains(s.cwd) else { continue }
+            current[idx] = s.cwd
+            order = current
+        }
+        if let order { MascotSettings.customOrder = order }
     }
 
     // MARK: - Mascot pose decay (temporary — both the "done!" and "?" poses)
@@ -253,6 +283,20 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// Claude Code fires no hook at all on a manual interrupt (Escape) — verified
+    /// against the official hooks docs, which state Stop "don't[s] fire on user
+    /// interrupts" — so an interrupted session has no event that could ever tell
+    /// Termi to leave `working`. A session frozen there with no PostToolUse
+    /// heartbeat (`ts` not advancing) for Tuning.staleWorkingTimeout is presumed
+    /// interrupted rather than genuinely still going. `pendingBackground` sessions
+    /// are exempt: a backgrounded shell can legitimately run far longer than that
+    /// timeout with no further hook activity at all until it resolves (see
+    /// termi-state.sh).
+    private func isStalledWorking(_ s: Session) -> Bool {
+        s.state == .working && !s.pendingBackground
+            && Date().timeIntervalSince1970 - s.ts > Tuning.staleWorkingTimeout
+    }
+
     /// What the mascot's *big pose* should treat a session as. Both `done` and
     /// `asking` decay to `idle` after Tuning.poseCelebrationDuration regardless of
     /// whether the underlying question/finish is still unresolved — the pose is just
@@ -266,8 +310,10 @@ final class SessionStore: ObservableObject {
         case .asking:
             guard let seen = askingFirstSeen[s.id] else { return .asking }
             return Date().timeIntervalSince(seen) > Tuning.poseCelebrationDuration ? .idle : .asking
-        default:
-            return s.state
+        case .working:
+            return isStalledWorking(s) ? .idle : .working
+        case .idle:
+            return .idle
         }
     }
 
@@ -369,6 +415,7 @@ final class SessionStore: ObservableObject {
     /// rather than a "finished" that nothing else on screen still claims.
     func listState(for session: Session) -> SessionState {
         if session.state == .done, doneAcknowledged.contains(session.id) { return .idle }
+        if isStalledWorking(session) { return .idle }
         return session.state
     }
 }

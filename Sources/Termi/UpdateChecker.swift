@@ -11,11 +11,15 @@ enum UpdateChecker {
         URL(string: "https://api.github.com/repos/Maxing5/termi-app/releases/latest")!
 
     /// Throttled to ~once/day via MascotSettings.lastUpdateCheck, well under
-    /// GitHub's 60 req/hr unauthenticated rate limit. Any failure — offline,
+    /// GitHub's 60 req/hr unauthenticated rate limit — unless `force` is set,
+    /// which skips the throttle. Used when the "Check for updates" toggle is
+    /// switched back on, so re-enabling shows a result right away instead of
+    /// silently waiting for the next app launch. Any failure — offline,
     /// malformed JSON, no releases yet — simply means no menu item shows up;
     /// there's no error case the caller needs to handle.
-    static func checkForUpdate(completion: @escaping (String, URL) -> Void) {
-        if let last = MascotSettings.lastUpdateCheck, Date().timeIntervalSince(last) < 20 * 3600 {
+    static func checkForUpdate(force: Bool = false, completion: @escaping (String, URL) -> Void) {
+        guard MascotSettings.updateCheckEnabled else { return }
+        if !force, let last = MascotSettings.lastUpdateCheck, Date().timeIntervalSince(last) < 20 * 3600 {
             return
         }
         // Run unbundled (`swift build && .build/debug/Termi`, per the README's

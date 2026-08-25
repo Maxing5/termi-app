@@ -42,7 +42,8 @@ enum ProcessDiscovery {
                 cwd: cwd,
                 state: .idle,
                 ppid: pid,
-                ts: Date().timeIntervalSince1970
+                ts: Date().timeIntervalSince1970,
+                pendingBackground: false
             )
         }
     }

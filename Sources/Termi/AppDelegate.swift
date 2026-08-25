@@ -44,11 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         focusWatcher.start()
 
-        UpdateChecker.checkForUpdate { [weak self] version, url in
-            guard let self else { return }
-            self.updateURL = url
-            self.updateItem.title = "Update available (\(version))"
-            self.updateItem.isHidden = false
+        checkForUpdate()
+
+        NotificationCenter.default.addObserver(
+            forName: .termiCheckForUpdatesNow, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.checkForUpdate(force: true)
         }
 
         NotificationCenter.default.addObserver(
@@ -206,6 +207,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         versionItem.isEnabled = false
 
         statusItem.menu = menu
+    }
+
+    private func checkForUpdate(force: Bool = false) {
+        UpdateChecker.checkForUpdate(force: force) { [weak self] version, url in
+            guard let self else { return }
+            self.updateURL = url
+            self.updateItem.title = "Update available (\(version))"
+            self.updateItem.isHidden = false
+        }
     }
 
     @objc private func openUpdatePage() {

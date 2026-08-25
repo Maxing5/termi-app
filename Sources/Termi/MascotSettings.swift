@@ -123,6 +123,16 @@ enum MascotSettings {
 
     // MARK: - Updates
 
+    /// On by default so real installs get the notice with no setup — but whoever's
+    /// actively cutting releases sees a false "update available" in the gap between
+    /// publishing a release and rebuilding their own local copy to match. Off is a
+    /// local, one-machine choice (UserDefaults, not a build flag), so it never
+    /// affects anyone else's install.
+    static var updateCheckEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "updateCheckEnabled") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "updateCheckEnabled") }
+    }
+
     /// Throttles UpdateChecker to roughly once a day, regardless of how many
     /// times the app is launched or restarted in that window.
     static var lastUpdateCheck: Date? {

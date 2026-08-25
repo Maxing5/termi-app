@@ -5,6 +5,9 @@ import SwiftUI
 /// even if toggled from the menu while Preferences is already open.
 extension Notification.Name {
     static let termiSoundSettingChanged = Notification.Name("termiSoundSettingChanged")
+    /// Posted when "Check for updates" is switched back on, so AppDelegate can run
+    /// a check right away instead of leaving it to silently wait for next launch.
+    static let termiCheckForUpdatesNow = Notification.Name("termiCheckForUpdatesNow")
 }
 
 /// All settings live here rather than in the menu bar menu — there are now far more
@@ -22,6 +25,7 @@ struct PreferencesView: View {
     @State private var askingSound = MascotSettings.askingSound
     @State private var doneSound = MascotSettings.doneSound
     @State private var customOrder = MascotSettings.customOrder
+    @State private var checkForUpdates = MascotSettings.updateCheckEnabled
 
     var body: some View {
         TabView {
@@ -64,6 +68,19 @@ struct PreferencesView: View {
                 .onChange(of: sortMode) { MascotSettings.sortMode = sortMode }
 
                 if sortMode == .custom { customOrderEditor }
+            }
+
+            Section("Updates") {
+                Toggle("Check for updates", isOn: $checkForUpdates)
+                    .onChange(of: checkForUpdates) {
+                        MascotSettings.updateCheckEnabled = checkForUpdates
+                        if checkForUpdates {
+                            NotificationCenter.default.post(name: .termiCheckForUpdatesNow, object: nil)
+                        }
+                    }
+                Text("Checks GitHub about once a day. Turn off if you're the one building and publishing releases.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
