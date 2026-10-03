@@ -26,8 +26,7 @@ final class MascotPanel: NSPanel {
         )
 
         isFloatingPanel = true
-        level = .statusBar                 // above normal windows *and* full-screen apps
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        applyOverlayBehavior()
 
         backgroundColor = .clear
         isOpaque = false
@@ -50,6 +49,47 @@ final class MascotPanel: NSPanel {
         contentView = container
 
         restoreOrigin()
+    }
+
+    // MARK: - Every Space, every screen
+
+    /// Space membership the panel needs to behave as an overlay on every desktop and
+    /// every full-screen app.
+    private static let overlayBehavior: NSWindow.CollectionBehavior =
+        [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+
+    private func applyOverlayBehavior() {
+        level = .statusBar                 // above normal windows *and* full-screen apps
+        collectionBehavior = Self.overlayBehavior
+    }
+
+    /// Whether the mascot is meant to be seen. Distinct from `isVisible`: the panel
+    /// is never ordered out, because a `.canJoinAllSpaces` window that is ordered out
+    /// and back in comes back pinned to the current Space only (measured on macOS 26
+    /// with CGSCopySpacesForWindows: membership collapsed to the single active Space).
+    /// Hiding is therefore alpha 0 + click-through, which keeps the window a member
+    /// of every Space.
+    private(set) var isShown = false
+
+    func show() {
+        isShown = true
+        alphaValue = 1
+        ignoresMouseEvents = false
+        reassertOnActiveSpace()
+    }
+
+    func hide() {
+        isShown = false
+        alphaValue = 0
+        ignoresMouseEvents = true
+    }
+
+    /// Re-applies the all-Spaces behavior and orders the panel in on whatever Space
+    /// is active. Called on show and on every Space switch, so a full-screen app's
+    /// Space (created after the panel was) still gets the mascot.
+    func reassertOnActiveSpace() {
+        applyOverlayBehavior()
+        orderFrontRegardless()
     }
 
     // A .nonactivatingPanel may become key without activating the app, which the

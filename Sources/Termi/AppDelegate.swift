@@ -52,6 +52,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.checkForUpdate(force: true)
         }
 
+        // Swiping to another desktop or full-screen app: make sure the mascot is there too.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let panel = self?.panel, panel.isShown else { return }
+            panel.reassertOnActiveSpace()
+        }
+
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
@@ -65,11 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyVisibility(_ state: MascotDisplayState) {
         let shouldShow = (state != .none) && !userHidden
         if shouldShow {
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            if !panel.isShown { panel.show() }
         } else {
-            if panel.isVisible {
+            if panel.isShown {
                 closePopover()
-                panel.orderOut(nil)
+                panel.hide()
             }
         }
     }
@@ -272,7 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.removeObject(forKey: "mascotOrigin")
         panel.moveToDefaultCorner()
         panel.saveOrigin()
-        if !userHidden, store.displayState != .none { panel.orderFrontRegardless() }
+        if !userHidden, store.displayState != .none { panel.show() }
     }
 
     @objc private func quit() {
