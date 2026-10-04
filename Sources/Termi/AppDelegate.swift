@@ -10,7 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var loginItem: NSMenuItem!
-    private var lockItem: NSMenuItem!
     private var soundItem: NSMenuItem!
     private var notifyItem: NSMenuItem!
     private var updateItem: NSMenuItem!
@@ -28,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MascotView(store: store)
         }
         panel.onClick = { [weak self] in self?.handleClick() }
-        panel.isLocked = MascotSettings.positionLocked
 
         buildStatusItem()
         buildPopover()
@@ -166,9 +164,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                      action: #selector(toggleMascot), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Reset Position",
                      action: #selector(resetPosition), keyEquivalent: "").target = self
-        lockItem = menu.addItem(withTitle: "Lock Position",
-                                action: #selector(toggleLock), keyEquivalent: "")
-        lockItem.target = self
 
         let sizeItem = NSMenuItem()
         let sizeHost = NSHostingView(rootView: MascotSizeControl(
@@ -252,11 +247,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    @objc private func toggleLock() {
-        MascotSettings.positionLocked.toggle()
-        panel.isLocked = MascotSettings.positionLocked
-    }
-
     @objc private func toggleSound() {
         Notifier.shared.soundEnabled.toggle()
         NotificationCenter.default.post(name: .termiSoundSettingChanged, object: nil)
@@ -293,7 +283,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 extension AppDelegate: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         loginItem?.state = LoginItem.isEnabled ? .on : .off
-        lockItem?.state = MascotSettings.positionLocked ? .on : .off
         soundItem?.state = Notifier.shared.soundEnabled ? .on : .off
         notifyItem?.state = MascotSettings.notificationsEnabled ? .on : .off
     }

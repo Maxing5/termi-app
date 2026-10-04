@@ -98,7 +98,6 @@ The menu bar icon (a terminal glyph) has:
 |---|---|
 | Show / Hide Mascot | Manual override, independent of session state |
 | Reset Position | Snaps back to the default corner |
-| Lock Position | Disables `⌘`-dragging; `⌘`-clicking still works |
 | Mascot Size | Slider + buttons, 50–250%, snaps in 10% steps, resizes around its own centre |
 | Update available *(only when one exists)* | Opens the GitHub release page — see [Updates](#updates) |
 | Preferences… | Opens the settings window (see below) |

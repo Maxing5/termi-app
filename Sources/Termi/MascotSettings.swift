@@ -40,7 +40,6 @@ enum MascotSettings {
     static var isResizingMascot = false
 
     private static let scaleKey = "mascotScale"
-    private static let lockedKey = "mascotPositionLocked"
 
     static var scale: CGFloat {
         get {
@@ -52,11 +51,6 @@ enum MascotSettings {
             let clamped = min(max(newValue, minScale), maxScale)
             UserDefaults.standard.set(Double(clamped), forKey: scaleKey)
         }
-    }
-
-    static var positionLocked: Bool {
-        get { UserDefaults.standard.bool(forKey: lockedKey) }
-        set { UserDefaults.standard.set(newValue, forKey: lockedKey) }
     }
 
     // MARK: - Popover

@@ -13,9 +13,6 @@ final class MascotPanel: NSPanel {
     /// Called on a click that wasn't a drag.
     var onClick: (() -> Void)?
 
-    /// When true, dragging is a no-op — set from the "Lock Position" menu item.
-    var isLocked: Bool = false
-
     init<Content: View>(@ViewBuilder content: () -> Content) {
         let initialSize = Self.size(forScale: MascotSettings.scale)
         super.init(
@@ -257,7 +254,7 @@ private final class MascotContainerView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let panel, panel.isPressing, !panel.isLocked else { return }
+        guard let panel, panel.isPressing else { return }
         let now = NSEvent.mouseLocation
         let dx = now.x - dragStartMouse.x
         let dy = now.y - dragStartMouse.y
