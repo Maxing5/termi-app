@@ -49,6 +49,48 @@ final class MascotPanel: NSPanel {
         contentView = container
 
         restoreOrigin()
+        installClickThroughMonitors()
+    }
+
+    // MARK: - Touch target (body only)
+
+    /// The clickable area: just the terminal-window body (Rig.bodyW × Rig.bodyH),
+    /// scaled with the mascot. Arms, legs, badges, bubble and the empty margin of
+    /// the panel are click-through, so they don't block whatever is underneath.
+    /// The rect is the body's resting position; idle bob (±1.5pt) is ignored.
+    static func bodyRect(in bounds: NSRect) -> NSRect {
+        let s = bounds.width / kBasePanelSize.width
+        let w = Rig.bodyW * s, h = Rig.bodyH * s
+        return NSRect(x: bounds.midX - w / 2, y: bounds.midY - h / 2, width: w, height: h)
+    }
+
+    private var bodyRectOnScreen: NSRect {
+        let b = Self.bodyRect(in: NSRect(origin: .zero, size: frame.size))
+        return b.offsetBy(dx: frame.minX, dy: frame.minY)
+    }
+
+    /// True while the user is mid-press on the body, so a fast drag can't flip the
+    /// window to click-through and drop the gesture.
+    fileprivate var isPressing = false
+    private var mouseMonitors: [Any] = []
+
+    /// A transparent window only lets clicks fall through where its pixels are fully
+    /// clear; the arms/legs are opaque. So we toggle `ignoresMouseEvents` from the
+    /// cursor position: the window only takes the mouse while it's over the body.
+    private func installClickThroughMonitors() {
+        acceptsMouseMovedEvents = true
+        if let g = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: { [weak self] _ in
+            self?.updateClickThrough()
+        }) { mouseMonitors.append(g) }
+        if let l = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved, handler: { [weak self] e in
+            self?.updateClickThrough(); return e
+        }) { mouseMonitors.append(l) }
+    }
+
+    func updateClickThrough() {
+        guard isShown, !isPressing else { return }
+        let over = bodyRectOnScreen.contains(NSEvent.mouseLocation)
+        if ignoresMouseEvents == over { ignoresMouseEvents = !over }
     }
 
     // MARK: - Every Space, every screen
@@ -75,6 +117,7 @@ final class MascotPanel: NSPanel {
         isShown = true
         alphaValue = 1
         ignoresMouseEvents = false
+        updateClickThrough()
         reassertOnActiveSpace()
     }
 
@@ -127,6 +170,7 @@ final class MascotPanel: NSPanel {
         let center = resizeAnchor ?? NSPoint(x: frame.midX, y: frame.midY)
         let newOrigin = NSPoint(x: center.x - newSize.width / 2, y: center.y - newSize.height / 2)
         setFrame(NSRect(origin: newOrigin, size: newSize), display: true)
+        updateClickThrough()
     }
 
     /// Call once when the resize interaction ends: clamps back on screen if the
@@ -180,11 +224,16 @@ private final class MascotContainerView: NSView {
     private var dragStartOrigin: NSPoint = .zero
     private var travelled: CGFloat = 0
 
-    /// Swallow hits for the whole panel rather than letting them reach the hosting view.
-    override func hitTest(_ point: NSPoint) -> NSView? { self }
+    /// Only the body is a touch target. Hits there are swallowed (never reach the
+    /// hosting view); hits anywhere else return nil.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        return MascotPanel.bodyRect(in: bounds).contains(local) ? self : nil
+    }
 
     override func mouseDown(with event: NSEvent) {
         guard let panel else { return }
+        panel.isPressing = true
         dragStartMouse = NSEvent.mouseLocation
         dragStartOrigin = panel.frame.origin
         travelled = 0
@@ -201,6 +250,8 @@ private final class MascotContainerView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         guard let panel else { return }
+        panel.isPressing = false
+        defer { panel.updateClickThrough() }
         if travelled < 3 {
             panel.onClick?()
         } else {
