@@ -26,10 +26,11 @@ ambient, at-a-glance signal instead of alt-tabbing between windows.
   |---|---|---|---|
   | ![idle](docs/images/state-idle.png) | ![working](docs/images/state-working.png) | ![asking](docs/images/state-asking.png) | ![done](docs/images/state-done.png) |
 
-- **Session list popover** — click the mascot for every open session and its
+- **Session list popover** — `⌘`-click the mascot's body for every open session and its
   real state. Optional live "elapsed time" column and usage-limit footer.
   Fully keyboard-navigable: `⌘↓`/`⌘↑` to highlight, `⌘↩` to jump straight to
-  that session's terminal.
+  that session's terminal. A plain click passes straight through the mascot
+  to whatever is underneath, so it never gets in your way; `⌘`-drag moves it.
 
   ![Session list popover](docs/images/popover.png)
 
@@ -97,7 +98,7 @@ The menu bar icon (a terminal glyph) has:
 |---|---|
 | Show / Hide Mascot | Manual override, independent of session state |
 | Reset Position | Snaps back to the default corner |
-| Lock Position | Disables dragging; clicking still works |
+| Lock Position | Disables `⌘`-dragging; `⌘`-clicking still works |
 | Mascot Size | Slider + buttons, 50–250%, snaps in 10% steps, resizes around its own centre |
 | Update available *(only when one exists)* | Opens the GitHub release page — see [Updates](#updates) |
 | Preferences… | Opens the settings window (see below) |

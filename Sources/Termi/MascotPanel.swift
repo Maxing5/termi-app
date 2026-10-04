@@ -55,8 +55,9 @@ final class MascotPanel: NSPanel {
     // MARK: - Touch target (body only)
 
     /// The clickable area: just the terminal-window body (Rig.bodyW × Rig.bodyH),
-    /// scaled with the mascot. Arms, legs, badges, bubble and the empty margin of
-    /// the panel are click-through, so they don't block whatever is underneath.
+    /// scaled with the mascot — and only while ⌘ is held. A plain click anywhere on
+    /// the mascot falls through to whatever is underneath; ⌘-click on the body opens
+    /// the session list, ⌘-drag moves it.
     /// The rect is the body's resting position; idle bob (±1.5pt) is ignored.
     static func bodyRect(in bounds: NSRect) -> NSRect {
         let s = bounds.width / kBasePanelSize.width
@@ -74,6 +75,11 @@ final class MascotPanel: NSPanel {
     fileprivate var isPressing = false
     private var mouseMonitors: [Any] = []
 
+    /// Polls ⌘ while the cursor is over the body. Watching modifier keys of other
+    /// apps with a global flagsChanged monitor would need Accessibility permission;
+    /// `NSEvent.modifierFlags` doesn't, and this only runs while hovering the body.
+    private var modifierPoll: Timer?
+
     /// A transparent window only lets clicks fall through where its pixels are fully
     /// clear; the arms/legs are opaque. So we toggle `ignoresMouseEvents` from the
     /// cursor position: the window only takes the mouse while it's over the body.
@@ -89,8 +95,19 @@ final class MascotPanel: NSPanel {
 
     func updateClickThrough() {
         guard isShown, !isPressing else { return }
-        let over = bodyRectOnScreen.contains(NSEvent.mouseLocation)
-        if ignoresMouseEvents == over { ignoresMouseEvents = !over }
+        let overBody = bodyRectOnScreen.contains(NSEvent.mouseLocation)
+        if overBody, modifierPoll == nil {
+            let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+                self?.updateClickThrough()
+            }
+            RunLoop.main.add(t, forMode: .common)
+            modifierPoll = t
+        } else if !overBody {
+            modifierPoll?.invalidate()
+            modifierPoll = nil
+        }
+        let interactive = overBody && NSEvent.modifierFlags.contains(.command)
+        if ignoresMouseEvents == interactive { ignoresMouseEvents = !interactive }
     }
 
     // MARK: - Every Space, every screen
@@ -232,7 +249,7 @@ private final class MascotContainerView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard let panel else { return }
+        guard let panel, event.modifierFlags.contains(.command) else { return }
         panel.isPressing = true
         dragStartMouse = NSEvent.mouseLocation
         dragStartOrigin = panel.frame.origin
@@ -240,7 +257,7 @@ private final class MascotContainerView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let panel, !panel.isLocked else { return }
+        guard let panel, panel.isPressing, !panel.isLocked else { return }
         let now = NSEvent.mouseLocation
         let dx = now.x - dragStartMouse.x
         let dy = now.y - dragStartMouse.y
@@ -249,7 +266,7 @@ private final class MascotContainerView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard let panel else { return }
+        guard let panel, panel.isPressing else { return }
         panel.isPressing = false
         defer { panel.updateClickThrough() }
         if travelled < 3 {
