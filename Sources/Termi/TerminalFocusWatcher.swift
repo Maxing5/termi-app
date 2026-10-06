@@ -32,10 +32,16 @@ final class TerminalFocusWatcher {
 
     private func poll() {
         guard let store, !store.pendingDoneSessions.isEmpty else { return }
+        guard let front = NSWorkspace.shared.frontmostApplication else { return }
+
+        if Self.editorBundleIDs.contains(front.bundleIdentifier ?? "") {
+            pollEditor(front, store: store)
+            return
+        }
 
         // Never query (and never launch) Terminal unless it's already running and
         // already the frontmost app — this must be a passive observer.
-        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.Terminal" else { return }
+        guard front.bundleIdentifier == "com.apple.Terminal" else { return }
         guard let frontTTY = frontmostTerminalTTY() else { return }
 
         for session in store.pendingDoneSessions where ttyForPID(session.ppid) == frontTTY {
@@ -43,11 +49,93 @@ final class TerminalFocusWatcher {
         }
     }
 
+    // MARK: - VS Code-family editors (integrated terminal)
+
+    /// Editors whose integrated terminal hosts sessions. None of them expose the
+    /// active terminal's tty to AppleScript, so matching is by process ancestry
+    /// (the session's `claude` process descends from the frontmost editor), narrowed
+    /// to the focused window by its title when Accessibility access is available.
+    static let editorBundleIDs: Set<String> = [
+        "com.microsoft.VSCode",
+        "com.microsoft.VSCodeInsiders",
+        "com.todesktop.230313mzl4w4u92",   // Cursor
+        "com.exafunction.windsurf",
+        "com.vscodium",
+    ]
+
+    private func pollEditor(_ app: NSRunningApplication, store: SessionStore) {
+        let editorPID = app.processIdentifier
+        let candidates = store.pendingDoneSessions.filter { isDescendant($0.ppid, of: editorPID) }
+        guard !candidates.isEmpty else { return }
+
+        // With a window title, only clear sessions whose folder that window shows
+        // (VS Code titles read "file — folder — …"). Without one (no Accessibility
+        // permission), clear every session in this editor rather than never clearing.
+        if let title = focusedWindowTitle(pid: editorPID) {
+            let parts = Set(title.components(separatedBy: " — ").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            })
+            for s in candidates where Self.pathComponents(s.cwd).contains(where: parts.contains) {
+                store.acknowledgeDone(sessionID: s.id)
+            }
+        } else {
+            for s in candidates { store.acknowledgeDone(sessionID: s.id) }
+        }
+    }
+
+    /// The session's cwd may be a subfolder of the window's workspace root, so any
+    /// path component may be the one shown in the title.
+    private static func pathComponents(_ path: String) -> [String] {
+        path.split(separator: "/").map(String.init).filter { !$0.isEmpty }
+    }
+
+    /// Walks parent pids via sysctl (no subprocess spawns) up to launchd.
+    private func isDescendant(_ pid: pid_t, of ancestor: pid_t) -> Bool {
+        var current = pid
+        for _ in 0..<32 {
+            if current == ancestor { return true }
+            guard current > 1, let parent = parentPID(of: current) else { return false }
+            current = parent
+        }
+        return false
+    }
+
+    private func parentPID(of pid: pid_t) -> pid_t? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        return info.kp_eproc.e_ppid
+    }
+
+    /// Focused window title via Accessibility. Never prompts — returns nil if Termi
+    /// isn't trusted, which makes the caller fall back to ancestry-only matching.
+    private func focusedWindowTitle(pid: pid_t) -> String? {
+        guard AXIsProcessTrusted() else { return nil }
+        let app = AXUIElementCreateApplication(pid)
+        var window: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &window) == .success,
+              let window, CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
+        var title: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &title) == .success,
+              let str = title as? String, !str.isEmpty else { return nil }
+        return str
+    }
+
     /// Brings the Terminal.app window/tab that owns `session` to the front — the
     /// ⌘↩ action in the session list. Mirrors the tty matching used for dismissal,
     /// just in the other direction.
     static func focus(session: Session) {
         let helper = TerminalFocusWatcher(store: nil)
+        // Integrated-terminal sessions: bring the owning editor forward (it can't be
+        // told which terminal tab to select, so the app is as precise as it gets).
+        if let editor = NSWorkspace.shared.runningApplications.first(where: {
+            editorBundleIDs.contains($0.bundleIdentifier ?? "")
+                && helper.isDescendant(session.ppid, of: $0.processIdentifier)
+        }) {
+            editor.activate()
+            return
+        }
         guard let tty = helper.ttyForPID(session.ppid) else { return }
         let script = """
         tell application "Terminal"

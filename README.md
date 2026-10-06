@@ -43,9 +43,10 @@ ambient, at-a-glance signal instead of alt-tabbing between windows.
 - macOS 14+
 - Xcode Command Line Tools (`xcode-select --install`)
 - [jq](https://jqlang.org)
-- Terminal.app — sessions in other terminal apps are still tracked and
-  alerted, but two conveniences are Terminal.app-specific: dismissing the
-  green badge by reopening that window, and `⌘↩` jumping to a session
+- Terminal.app or a VS Code-family editor's integrated terminal (VS Code,
+  Insiders, Cursor, Windsurf, VSCodium) — sessions in other terminal apps are
+  still tracked and alerted, but two conveniences need one of those: dismissing
+  the green badge by reopening that window, and `⌘↩` jumping to a session
 
 ## Install
 
@@ -277,9 +278,11 @@ Sources/Termi/
 
 ## Known limitations
 
-- Terminal.app-specific features (badge dismiss by reopening, `⌘↩`) don't
-  work in other terminal apps — sessions there are still fully tracked and
-  alerted otherwise.
+- Badge dismiss by reopening and `⌘↩` work in Terminal.app and VS Code-family
+  editors only. In editors, dismissal is per *window*, not per terminal tab:
+  with Accessibility access Termi matches the focused window's title to the
+  session's folder; without it, focusing the editor clears every finished
+  session running inside it. `⌘↩` just brings the editor forward.
 - Ad-hoc signed, not notarized — a locally built binary, so this is ordinary
   Gatekeeper behavior, not a sign of anything wrong with the build.
 - macOS only.
